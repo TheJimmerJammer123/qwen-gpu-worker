@@ -35,7 +35,8 @@ repository_root="$(git -C "$repository" rev-parse --show-toplevel)"
   || { echo "error: pass the task worktree root, not a subdirectory" >&2; exit 2; }
 [[ -z "$(git -C "$repository" status --porcelain --untracked-files=all)" ]] \
   || { echo "error: task worktree must start completely clean" >&2; exit 2; }
-[[ -z "$(git -C "$repository" status --ignored --porcelain | head -1)" ]] \
+[[ -z "$(git -C "$repository" status --ignored --porcelain \
+  | grep -vE '^!! \.harness(/|$)' | head -1)" ]] \
   || { echo "error: task worktree contains ignored files; use a fresh linked worktree" >&2; exit 2; }
 branch="$(git -C "$repository" symbolic-ref --quiet --short HEAD)" \
   || { echo "error: task worktree cannot use detached HEAD" >&2; exit 2; }

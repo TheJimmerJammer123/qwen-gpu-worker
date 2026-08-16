@@ -54,6 +54,25 @@ class QwenWrapperTest(unittest.TestCase):
             home.mkdir()
             subprocess.run(["git", "init", "-q", str(repo)], check=True)
             subprocess.run(["git", "-C", str(repo), "switch", "-q", "-c", "qwen/test-task"], check=True)
+            (repo / ".gitignore").write_text(".harness/\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(repo), "add", ".gitignore"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo),
+                    "-c",
+                    "user.name=Wrapper Test",
+                    "-c",
+                    "user.email=wrapper-test@example.invalid",
+                    "commit",
+                    "-qm",
+                    "ignore harness state",
+                ],
+                check=True,
+            )
+            (repo / ".harness").mkdir()
+            (repo / ".harness" / "writer.lock").touch()
             prompt = temp / "prompt.md"
             prompt.write_text("Make a harmless test change.", encoding="utf-8")
             fake_docker = bin_dir / "docker"

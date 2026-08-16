@@ -6,6 +6,10 @@ deliberately separate from the Android repositories and the homelab control
 plane. A GPU worker owns no durable state: model files are a cache, benchmark
 records are copied out, and coding work survives through a task branch.
 
+The operator boundary is `ubuntudailydriver`: image builds, registry pushes,
+RunPod API calls, evidence, and Qwen Code all originate here. `devserver2` is not
+part of the execution path. See `docs/LOCAL_CONTROL.md`.
+
 ## Pinned baseline
 
 - Model: `Qwen/Qwen3.8-27B`, upstream revision

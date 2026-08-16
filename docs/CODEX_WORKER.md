@@ -31,6 +31,29 @@ two-way proxy flattens namespace tools into uniquely named functions and restore
 the namespace on returned calls. Other users also merge system/developer messages
 into one leading instruction block and provide an explicit Codex model catalog.
 
+## Current vLLM alternative
+
+Current vLLM documentation now includes a dedicated Codex backend integration and
+implements the Responses API. Its Qwen examples enable both automatic tool choice
+and the Qwen reasoning/tool parsers. That makes a pinned vLLM experiment a valid
+native-route candidate; it is stronger evidence than copying the older Unsloth
+profile snippet unchanged.
+
+The commonly circulated recipe is still incomplete for this prototype. A plain
+`vllm serve ... --trust-remote-code` command omits `--enable-auto-tool-choice`,
+`--tool-call-parser qwen3_coder`, and `--reasoning-parser qwen3`. Current Codex
+provider configuration is TOML with a provider block and `wire_api = "responses"`,
+not the pasted `~/.config/codex/profiles.json` shape. Most importantly, the route
+must reproduce namespace and custom-tool calls before it can replace the bounded
+Qwen Code worker. The existing llama.cpp failure proves that exposing
+`/v1/responses` alone is insufficient.
+
+The hardware claim is also a deployment choice, not a prerequisite. FP8 on a
+48-80 GB GPU may preserve more model quality and KV headroom, but this prototype
+already measured the pinned Q4_K_M target at 32K and 64K fully resident on one
+24 GB RTX 3090. Do not discard that economic baseline until a comparable FP8
+quality/cost run justifies it.
+
 ## Practical community patterns
 
 ### 1. Headless Qwen Code as an external worker — recommended first
@@ -78,8 +101,10 @@ passes review, add a distinct self-hosted worker route with explicit availabilit
 checks and fallback to Codex review.
 
 Evaluate a native custom-agent adapter only after that path is producing valuable
-nightly diffs. If pursued, implement the smallest audited loopback proxy against
-captured Codex 0.147.0 fixtures and pin both Codex and llama.cpp versions.
+nightly diffs. In parallel, a pinned current-vLLM native integration test is now
+reasonable and may avoid a custom adapter. If an adapter remains necessary,
+implement the smallest audited loopback proxy against captured Codex 0.147.0
+fixtures and pin both Codex and the inference backend versions.
 
 ## Primary references
 
@@ -97,6 +122,12 @@ captured Codex 0.147.0 fixtures and pin both Codex and llama.cpp versions.
   <https://github.com/ggml-org/llama.cpp/issues/24295>
 - Unsloth user's end-to-end Qwen/Codex proxy reproduction:
   <https://github.com/unslothai/unsloth/issues/5141>
+- Official vLLM Codex integration:
+  <https://docs.vllm.ai/en/latest/serving/integrations/codex/>
+- Official vLLM OpenAI-compatible serving reference:
+  <https://docs.vllm.ai/en/latest/serving/online_serving/>
+- Unsloth discussion of current Codex provider/profile syntax:
+  <https://github.com/unslothai/unsloth/issues/6003>
 - Headless Qwen Code worker implementation report:
   <https://github.com/procoders/superpowers-v/pull/8>
 - Emerging full Responses adapter (audit before reuse):

@@ -56,7 +56,7 @@ Check the intended machine before building or renting time:
 ```bash
 ./scripts/preflight.sh build   # image build machine
 ./scripts/preflight.sh gpu     # Compose-capable 3090 host
-./scripts/preflight.sh client  # Qwen Code client, after credential rotation
+./scripts/preflight.sh client  # Qwen Code client, after quarantine is cleared
 ```
 
 ```bash
@@ -223,12 +223,24 @@ median; the 64K/MTP profile used 21,994 MiB and generated at 37.511 tok/s. Both
 profiles completed three long-context calls without retries. The Pod is stopped
 with its model cache retained.
 
-The prepared JammerVIO coding task has not run because the installed Qwen Code
-CLI remains protected by an older credential-quarantine marker. Native Codex
-custom-provider registration also needs a Responses compatibility adapter for
-Codex namespace tools and Qwen system-message ordering. The recommended immediate
-worker shape is therefore the existing bounded Qwen Code subprocess/worktree
-pattern, with Codex reviewing and publishing its diff. See `docs/RESULTS.md` and
+The prepared JammerVIO task ran through the bounded Qwen Code worktree route.
+The 32K run reached the model and completed 14 read-only tool calls but exceeded
+Qwen Code's context safety limit before editing. The 64K/MTP retry produced the
+requested fail-fast Supabase configuration guard and five focused tests. Codex
+and an independent reviewer found no blocking issue; sanctioned remote compile
+and focused tests passed. The change is available as draft GitLab MR !98 and was
+not merged. Its pipeline is pending because no eligible `jammervio,pve4` runner
+is registered.
+
+Qwen Code truncated the successful monolithic JSON report at exactly 65,536
+bytes. The wrapper now requests JSON Lines streaming, validates its terminal
+result, and probes the authenticated endpoint before launching the agent. That
+transport fix is locally tested but still needs one live task retry. Complete
+that retry and GitLab CI before registering a distinct self-hosted route in the
+Codex worker harness. Do not replace the existing native Bailian-backed
+`qwen_worker`. Current vLLM releases also expose a dedicated Codex Responses
+integration worth testing separately; it must prove namespace and custom-tool
+behavior before it becomes the preferred route. See `docs/RESULTS.md` and
 `docs/CODEX_WORKER.md`.
 
 The local validation command is:
@@ -238,7 +250,8 @@ The local validation command is:
 ```
 
 Account and secret handling is documented in `docs/CREDENTIAL_HANDOFF.md`. The
-remaining external gate is verifying rotation of the quarantined older Qwen
-credential, removing its marker deliberately, restarting the cached Pod, and
-running the prepared repository task. No source-control credential belongs on the
-GPU worker.
+operator explicitly authorized clearing the local quarantine without claiming
+that the older credential was rotated; that exception is recorded under `work/`.
+Only the disposable Infisical `/qwen` key was injected through the scrubbed
+wrapper. No source-control credential belongs on the GPU worker. The RunPod Pod
+is stopped with its model cache retained.

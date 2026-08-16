@@ -11,9 +11,9 @@ Date: 2026-08-16
 - The enclosing development control-plane repository also has extensive unrelated
   changes. It was not changed.
 - Local GPU: NVIDIA Quadro P2000, 5,120 MiB. It cannot run this model.
-- Local Qwen Code: 0.21.1, but the existing integration is quarantined after a
-  credential appeared in a diagnostic process argument. No existing credentials
-  were read or tested.
+- Local Qwen Code: 0.21.1. A credential quarantine was cleared only after the
+  operator explicitly authorized proceeding without verified rotation. No older
+  credential was read or reused; the exception is recorded under `work/`.
 - Local container toolchain: Docker Engine 29.1.3, Compose 2.40.3, and Buildx
   0.30.1. The engine is enabled and `jim` is in the `docker` group. The
   temporary bootstrap sudo rule was removed after installation.
@@ -87,8 +87,8 @@ expected on the CPU-only build path, `libcuda.so.1` is absent until the NVIDIA
 container runtime injects the host driver; the executable runtime check remains
 a RunPod GPU gate.
 
-This host's GPU/client preflights correctly stop on the 5 GB local GPU and Qwen
-quarantine marker. Those are expected gates, not successful inference results.
+This host's GPU preflight correctly stops on the 5 GB local GPU. Client preflight
+passed after the explicitly authorized quarantine exception was recorded.
 
 The official RunPod pricing page listed the RTX 3090 at $0.22/hour on Community
 Cloud and $0.50/hour on Secure Cloud when checked. At the lower on-demand rate,
@@ -136,37 +136,64 @@ worktree from `develop`.
 
 The earlier zero/special-episode candidate was rejected after discovery that it
 already exists on `feat/22-series-hero-download`; reproducing user work would not
-be a meaningful benchmark. The Supabase task has not been dispatched because
-the installed Qwen Code CLI remains deliberately blocked by
-`/home/jim/Documents/ChatGPT/JammerVIO/work/qwen.disabled`. That marker says an
-older credential appeared in a diagnostic process argument and must be rotated
-before the CLI is re-enabled. The fresh RunPod key does not resolve that older
-credential incident, and the marker was not bypassed.
+be a meaningful benchmark.
 
-The clean worktree is prepared at
-`/home/jim/worktrees/jammervio/qwen-supabase-config-guard` on branch
-`qwen/supabase-config-guard`, based on `develop` commit
-`e8c654a9e8a5b2e2eaf59e64aed99f26716eaaf9`. No product diff, commit, push,
-merge request, or test result is claimed.
+Four bounded task launches established the end-to-end behavior:
 
-There is also a repository-authority mismatch to resolve before publication:
-the closest checked-in JammerVIO instructions currently say GitLab is authoritative
-and GitHub is pull-only, while a separate installed JammerVIO skill says GitHub is
-authoritative. Until the repository instructions are reconciled, use a local task
-branch as the checkpoint and do not push or open either kind of request by guess.
+1. The first stopped before inference because Qwen Code's pinned Docker sandbox
+   image was absent and the current desktop process lacked Docker group access.
+2. The second exposed a real isolation bug: the host auth proxy was loopback-only
+   and unreachable from the sandbox. Qwen Code returned exit zero despite seven
+   API errors and no model tokens. The wrapper now binds only to the private
+   Docker bridge, maps `host.docker.internal`, and rejects semantic false-success.
+3. The 32K baseline reached the model, made 10 successful API requests and 14
+   successful read/search tool calls, and used 219,320 cumulative prompt tokens
+   plus 16,288 output tokens. Compression still left an estimated 31,071-token
+   prompt above Qwen Code's 30,852.8 safety limit, so it stopped without editing.
+4. The optimized 64K/MTP retry produced the complete requested source diff. Qwen
+   Code truncated its JSON report at exactly 65,536 bytes, so the hardened wrapper
+   correctly returned failure even though the worktree diff was available for
+   untrusted Codex review.
+
+The wrapper now uses JSON Lines streaming instead of the truncated monolithic
+report, validates the terminal result across the stream, and probes the
+authenticated `/models` endpoint before launching Qwen. All 25 local prototype
+tests pass. The transport change still needs one live endpoint retry before it is
+treated as operationally proven.
+
+The resulting change validates blank and whitespace-only Supabase URL/key values
+before client construction, names the two expected Gradle properties in actionable
+errors, and never includes configured values. It adds five pure unit tests. Codex
+review and an independent read-only review found no blocker. The sanctioned Netcup
+compile passed in 3m33s; the full suite reported 1,179 tests with the repository's
+existing 12-failure ceiling; and the focused class passed 5/5 in 19s.
+
+The orchestrator committed the reviewed diff as
+`84b0ec1ddfff54050a19a8df8aa4e23993474f48` on
+`fix/supabase-config-guard`, pushed it through the canonical GitLab control plane,
+and opened draft MR !98. It was not merged. Pipeline 392 remains pending because
+no eligible `jammervio,pve4` project runner is registered; the disposable runner
+controller is disabled and VM 321 is stopped on the wrong snapshot lineage.
+
+The four task allocations totaled about 0.44 GPU-hours, estimated from start/stop
+timestamps, or about $0.10 at $0.22/hour. This is an allocation estimate rather
+than provider billing reconciliation. The Pod is stopped with its model cache
+retained.
 
 ## Decision gate
 
-The inference and economics gates passed strongly enough to continue, but do not
-start the unattended SaladCloud phase until the Qwen Code coding task and review
-gate pass. The remaining gates are:
+The inference, task-quality, Codex-review, compile, and focused-test gates passed.
+Do not start the unattended SaladCloud phase yet. The remaining gates are:
 
-1. Rotate the quarantined older Qwen credential, deliberately remove the marker,
-   and run the prepared task through Qwen Code.
-2. Codex reviews the complete diff and the sanctioned JammerVIO CI checks pass.
-3. Choose the Codex integration shape: use the already-proven headless Qwen Code
-   worktree worker first, or separately build and audit a Responses translation
-   proxy for native Codex subagent registration.
+1. Restore the authorized disposable GitLab runner boundary and complete pipeline
+   392 without auto-merging draft MR !98.
+2. Live-verify the new JSON Lines report transport and endpoint availability
+   probe against the cached RunPod endpoint.
+3. Register a distinct self-hosted Qwen Code subprocess route with worktree
+   isolation, timeout/budget, Git checkpoints, availability checks, and Codex
+   review/escalation. Keep the native Bailian-backed `qwen_worker` unchanged.
+4. Separately test current vLLM's native Codex Responses integration, including
+   namespace/custom tools and Qwen reasoning/tool parsers, before preferring it.
 
 Both the 32K baseline and 64K/MTP profile fit fully on one 3090. At the measured
 rates, the inference side is economically attractive; the open decision is agent

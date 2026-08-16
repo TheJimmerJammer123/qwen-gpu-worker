@@ -84,8 +84,9 @@ be reconciled from RunPod.
 
 ## 4. Qwen Code task
 
-First rotate the quarantined credential and remove the marker only after that
-rotation is verified. From the client host:
+Clear any credential quarantine only after rotation is verified or the operator
+explicitly records an exception accepting the unresolved rotation status. Never
+reuse or inspect the older credential. From the client host:
 
 ```bash
 export POD_ID=whmvwff58c7wk5

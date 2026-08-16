@@ -54,7 +54,7 @@ fi
 mkdir -p "$qwen_home" "$runtime_dir"
 chmod 700 "$qwen_home" "$runtime_dir"
 proxy_port_file="${runtime_dir}/auth-proxy-${BASHPID}.port"
-qwen_output_file="${runtime_dir}/qwen-output-${BASHPID}.json"
+qwen_output_file="${runtime_dir}/qwen-output-${BASHPID}.jsonl"
 proxy_client_token="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
 proxy_bind_host="127.0.0.1"
 proxy_client_host="127.0.0.1"
@@ -91,6 +91,27 @@ for _ in $(seq 1 50); do
 done
 [[ -s "$proxy_port_file" ]] || { echo "error: local auth proxy did not start" >&2; exit 1; }
 local_base_url="http://${proxy_client_host}:$(<"$proxy_port_file")/v1"
+probe_base_url="http://${proxy_bind_host}:$(<"$proxy_port_file")/v1"
+
+PROBE_BASE_URL="$probe_base_url" \
+PROBE_CLIENT_TOKEN="$proxy_client_token" \
+  python3 - <<'PY'
+import json
+import os
+import urllib.request
+
+request = urllib.request.Request(
+    os.environ["PROBE_BASE_URL"].rstrip("/") + "/models",
+    headers={"Authorization": "Bearer " + os.environ["PROBE_CLIENT_TOKEN"]},
+)
+try:
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = json.load(response)
+except Exception as error:
+    raise SystemExit(f"error: Qwen endpoint availability probe failed: {error}") from error
+if not isinstance(payload, dict) or not isinstance(payload.get("data"), list) or not payload["data"]:
+    raise SystemExit("error: Qwen endpoint availability probe returned no models")
+PY
 
 jq --arg base_url "$local_base_url" \
   --argjson context_size "${QWEN_CONTEXT_SIZE:-32768}" \
@@ -116,7 +137,7 @@ env -i \
   --model Qwen3.8-27B-Q4_K_M \
   --sandbox \
   --approval-mode yolo \
-  --output-format json \
+  --output-format stream-json \
   --max-session-turns 45 \
   --max-tool-calls 60 \
   --max-wall-time 30m \
@@ -127,9 +148,8 @@ env -i \
 
 python3 -c 'import pathlib,sys; sys.stdout.write(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))' \
   "$qwen_output_file"
-if [[ "$status" -eq 0 ]] && ! jq -e '
-  (if type == "array" then . else [.] end)
-  | map(select(.type == "result"))
+if [[ "$status" -eq 0 ]] && ! jq -s -e '
+  map(select(.type == "result"))
   | last
   | .subtype == "success"
     and .is_error == false

@@ -44,6 +44,13 @@ tool-sandbox arguments, benchmark output, or the evidence bundle. The Qwen
 launcher keeps the real key in a short-lived localhost auth proxy and gives Qwen
 only a random loopback token with no value against the remote endpoint.
 
+For the first live Pod, the disposable client/server key is stored as
+`QWEN_GPU_API_KEY` in Infisical project
+`8e8371f7-6a39-4304-a608-1703604648ba`, environment `prod`, path `/qwen`.
+It was written through stdin and its value was never placed in a process
+argument. Use `infisical run` with that path to inject it into the Qwen launcher;
+do not export, print, or copy it into a settings file.
+
 ## Rotation and teardown
 
 - Rotate or permanently abandon the old credential referenced by

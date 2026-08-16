@@ -19,6 +19,12 @@ SPEC.loader.exec_module(benchmark)
 
 
 class BenchmarkTest(unittest.TestCase):
+    def test_remote_gpu_override_avoids_local_gpu_identity(self) -> None:
+        snapshot = benchmark.gpu_snapshot("RTX 3090", 19142, 24576, "570.211.01")
+        self.assertEqual(snapshot["name"], "RTX 3090")
+        self.assertEqual(snapshot["memory_used_mib"], 19142)
+        self.assertEqual(snapshot["telemetry_source"], "remote-provider")
+
     def test_run_once_records_required_measurements(self) -> None:
         response = {
             "choices": [{"finish_reason": "stop", "message": {"content": "Benchmark response."}}],

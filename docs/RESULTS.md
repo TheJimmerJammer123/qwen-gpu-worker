@@ -35,11 +35,27 @@ arithmetic is not accepted as proof that the optimized profile fits.
 
 | Profile | Status | Peak VRAM | Prompt tok/s | Output tok/s | Failures/retries | GPU-hours | Cost |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| baseline 32K | blocked: no cloud GPU provisioned | — | — | — | — | 0 | $0 |
-| optimized MTP 64K | not attempted until baseline passes | — | — | — | — | 0 | $0 |
+| baseline 32K | 3/3 stable | 19,142 MiB | 1,014.959 median | 29.755 median | 0/0 | 0.048113 | $0.0106 |
+| optimized MTP 64K | 3/3 stable | 21,994 MiB | 847.999 median | 37.511 median | 0/0 | 0.089717 | $0.0197 |
 
-These cells must be filled from `results/benchmarks.jsonl`; estimates must not be
-substituted for measurements.
+The baseline used 30,181 median input tokens. The optimized profile used 60,180
+median input tokens and improved median generation speed by 26.1%. Across its
+three runs, MTP accepted 2,092 of 3,748 drafted tokens (55.8%). The prompt-rate
+figures are not an apples-to-apples speed comparison because the optimized run
+processed twice as much context.
+
+A deliberately retained first baseline attempt capped output at 512 tokens. All
+three calls exhausted that cap while reasoning, one produced no visible answer,
+and the other two needed retries. Raising the conservative allowance to 2,048
+tokens yielded three natural `stop` completions with no retries. Qwen Code remains
+configured for up to 8,192 output tokens; a 512-token agent budget is not viable
+for this thinking model.
+
+Request wall time across the failed-cap run and the two accepted three-run
+profiles was 0.217 GPU-hours and about $0.048 at $0.22/hour. The Pod was allocated
+from 16:00:29Z to 16:46:35Z, about 0.768 hours and $0.169 before any storage fee;
+that broader number includes cold downloads, profile restarts, API/tool smokes,
+and the native Codex compatibility test.
 
 ## Credential-ready preparation
 
@@ -90,6 +106,22 @@ non-interruptible service. Both authenticated HTTPS proxy and direct TCP are
 exposed; the latter is the preferred coding path because RunPod documents a
 100-second HTTP-proxy request ceiling.
 
+The published image is
+`ghcr.io/thejimmerjammer123/qwen-gpu-worker:b10453`, OCI index digest
+`sha256:fbd9214685eb9f7ca3fa814303a8cd897b500ce102ac76e39f499f4953b7528c`.
+GitHub Actions run `31956017154` built it successfully. RunPod Pod
+`whmvwff58c7wk5` pulled that image on one Community RTX 3090 at $0.22/hour.
+The 18.97 GB target artifact took about 14 minutes to download and verify on the
+cold volume; the 1.68 GB MTP artifact took about 91 seconds. The stopped Pod and
+its `/models` volume are retained temporarily so the coding-task run can restart
+without downloading the artifacts again.
+
+The server's basic Responses API, streaming SSE, and a required function call all
+worked. A real Codex CLI 0.147.0 turn did not: Codex emitted `namespace` tools that
+llama.cpp skipped, then Qwen's template rejected the converted request because a
+system message was not first. This is a protocol-adapter gap, not a model or GPU
+failure. See `docs/CODEX_WORKER.md`.
+
 ## Real coding task
 
 The best non-duplicative first task is a fail-fast Supabase configuration guard in
@@ -105,8 +137,17 @@ worktree from `develop`.
 The earlier zero/special-episode candidate was rejected after discovery that it
 already exists on `feat/22-series-hero-download`; reproducing user work would not
 be a meaningful benchmark. The Supabase task has not been dispatched because
-inference has not yet run and the old Qwen credential path is quarantined. No
-JammerVIO branch, commit, merge request, or pull request is claimed.
+the installed Qwen Code CLI remains deliberately blocked by
+`/home/jim/Documents/ChatGPT/JammerVIO/work/qwen.disabled`. That marker says an
+older credential appeared in a diagnostic process argument and must be rotated
+before the CLI is re-enabled. The fresh RunPod key does not resolve that older
+credential incident, and the marker was not bypassed.
+
+The clean worktree is prepared at
+`/home/jim/worktrees/jammervio/qwen-supabase-config-guard` on branch
+`qwen/supabase-config-guard`, based on `develop` commit
+`e8c654a9e8a5b2e2eaf59e64aed99f26716eaaf9`. No product diff, commit, push,
+merge request, or test result is claimed.
 
 There is also a repository-authority mismatch to resolve before publication:
 the closest checked-in JammerVIO instructions currently say GitLab is authoritative
@@ -116,17 +157,17 @@ branch as the checkpoint and do not push or open either kind of request by guess
 
 ## Decision gate
 
-Do not proceed to a nightly SaladCloud worker yet. Proceed to the inexpensive
-single-3090 RunPod measurement now. Advance to SaladCloud packaging only if all of
-these are observed:
+The inference and economics gates passed strongly enough to continue, but do not
+start the unattended SaladCloud phase until the Qwen Code coding task and review
+gate pass. The remaining gates are:
 
-1. Baseline starts with full target-model GPU offload and stays below 24 GB VRAM.
-2. At least three baseline calls complete with no malformed tool calls or server
-   restart and a useful output rate for an interactive coding loop.
-3. Qwen Code completes the isolated repository task within the configured budgets.
-4. Independent review finds the diff worth testing, and the sanctioned repository
-   checks pass.
-5. The measured GPU-hours and displayed RunPod rate support the expected economics.
+1. Rotate the quarantined older Qwen credential, deliberately remove the marker,
+   and run the prepared task through Qwen Code.
+2. Codex reviews the complete diff and the sanctioned JammerVIO CI checks pass.
+3. Choose the Codex integration shape: use the already-proven headless Qwen Code
+   worktree worker first, or separately build and audit a Responses translation
+   proxy for native Codex subagent registration.
 
-The optimized 64K/MTP profile is a secondary result. A stable 32K baseline is
-enough to justify continuing even if 64K plus MTP does not fit on one 3090.
+Both the 32K baseline and 64K/MTP profile fit fully on one 3090. At the measured
+rates, the inference side is economically attractive; the open decision is agent
+quality and orchestration reliability, not GPU feasibility.

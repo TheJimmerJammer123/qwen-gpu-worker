@@ -88,9 +88,20 @@ First rotate the quarantined credential and remove the marker only after that
 rotation is verified. From the client host:
 
 ```bash
+export POD_ID=whmvwff58c7wk5
+infisical run --domain https://infisical.tailbf2de.ts.net \
+  --projectId 8e8371f7-6a39-4304-a608-1703604648ba \
+  --env prod --path /runpod -- \
+  python3 scripts/runpod-api.py start --pod-id "$POD_ID" --yes
+
+# Re-read the direct_tcp_base_url after every start; its mapped port changes.
+infisical run --domain https://infisical.tailbf2de.ts.net \
+  --projectId 8e8371f7-6a39-4304-a608-1703604648ba \
+  --env prod --path /runpod -- \
+  python3 scripts/runpod-api.py get-pod --pod-id "$POD_ID"
+
 ./scripts/preflight.sh client
-export QWEN_GPU_BASE_URL='https://RUNPOD-ENDPOINT/v1'
-export QWEN_GPU_API_KEY="$LLAMA_API_KEY"
+export QWEN_GPU_BASE_URL='http://RUNPOD-IP:MAPPED-TCP-PORT/v1'
 export QWEN_CONTEXT_SIZE=32768
 export QWEN_SANDBOX_PROVIDER=docker
 
@@ -101,7 +112,10 @@ export QWEN_SANDBOX_PROVIDER=docker
   qwen/supabase-config-guard \
   develop
 
-./scripts/run-qwen-code.sh \
+infisical run --domain https://infisical.tailbf2de.ts.net \
+  --projectId 8e8371f7-6a39-4304-a608-1703604648ba \
+  --env prod --path /qwen -- \
+  ./scripts/run-qwen-code.sh \
   /path/to/jammervio-qwen-supabase \
   prompts/jammervio-supabase-config-guard.md \
   > results/qwen-code-task.json \

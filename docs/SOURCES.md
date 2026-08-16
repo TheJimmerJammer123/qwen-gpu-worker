@@ -27,6 +27,15 @@ Checked 2026-08-16.
   <https://docs.runpod.io/pods/manage-pods>
 - RunPod authenticated GPU stock/price query:
   <https://docs.runpod.io/sdks/graphql/manage-pods>
+- Official Codex custom-provider configuration:
+  <https://developers.openai.com/codex/config-reference/>
+- Official Codex custom-agent configuration:
+  <https://developers.openai.com/codex/subagents/>
+- Current Codex/llama.cpp compatibility evidence and community workarounds:
+  <https://github.com/openai/codex/issues/26234>
+  <https://github.com/openai/codex/issues/36942>
+  <https://github.com/ggml-org/llama.cpp/issues/24295>
+  <https://github.com/unslothai/unsloth/issues/5141>
 
 Artifact hashes in `config/model.env` were taken from Hugging Face's pinned
 revision response (`x-linked-etag`, the LFS SHA-256) and are rechecked after each

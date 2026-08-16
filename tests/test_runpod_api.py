@@ -75,12 +75,37 @@ class RunPodApiTest(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "at least 32"):
                 runpod_api.prototype_payload()
 
+    def test_profile_update_replaces_only_expected_environment(self) -> None:
+        env = {"LLAMA_API_KEY": "b" * 64, "GPU_HOURLY_COST_USD": "0.22"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            payload = runpod_api.profile_update_payload("optimized")
+        self.assertEqual(payload["env"]["PROFILE"], "optimized")
+        self.assertEqual(
+            sorted(payload["env"]),
+            ["GPU_HOURLY_COST_USD", "LLAMA_API_KEY", "PROFILE"],
+        )
+
+    def test_profile_update_accepts_durable_client_key_name(self) -> None:
+        env = {"QWEN_GPU_API_KEY": "c" * 64, "GPU_HOURLY_COST_USD": "0.22"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            payload = runpod_api.profile_update_payload("baseline")
+        self.assertEqual(payload["env"]["LLAMA_API_KEY"], "c" * 64)
+
+    def test_profile_update_rejects_unknown_profile(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "baseline or optimized"):
+            runpod_api.profile_update_payload("experimental")
+
     def test_rejects_non_prototype_mutation(self) -> None:
         with mock.patch.object(
             runpod_api, "find_pod", return_value={"id": "old", "name": "jammervision"}
         ):
             with self.assertRaisesRegex(SystemExit, "outside the Qwen prototype"):
                 runpod_api.require_prototype_pod("old")
+
+    def test_cloud_mutations_require_confirmation(self) -> None:
+        args = type("Args", (), {"yes": False})()
+        with self.assertRaisesRegex(SystemExit, "rerun with --yes"):
+            runpod_api.require_confirmation(args, "enable-telemetry")
 
 
 if __name__ == "__main__":

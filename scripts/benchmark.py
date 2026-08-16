@@ -19,7 +19,20 @@ from pathlib import Path
 from typing import Any
 
 
-def gpu_snapshot() -> dict[str, Any] | None:
+def gpu_snapshot(
+    name_override: str | None = None,
+    used_override: int | None = None,
+    total_override: int | None = None,
+    driver_override: str | None = None,
+) -> dict[str, Any] | None:
+    if name_override and total_override:
+        return {
+            "name": name_override,
+            "memory_used_mib": used_override,
+            "memory_total_mib": total_override,
+            "driver_version": driver_override,
+            "telemetry_source": "remote-provider",
+        }
     try:
         output = subprocess.check_output(
             [
@@ -155,7 +168,12 @@ def run_once(args: argparse.Namespace, prompt: str, sequence: int) -> dict[str, 
 
     def sample_gpu() -> None:
         while not stop.wait(0.20):
-            value = gpu_snapshot()
+            value = gpu_snapshot(
+                getattr(args, "gpu_name", None),
+                getattr(args, "gpu_memory_used_mib", None),
+                getattr(args, "gpu_memory_total_mib", None),
+                getattr(args, "gpu_driver_version", None),
+            )
             if value is not None:
                 samples.append(value)
 
@@ -209,7 +227,12 @@ def run_once(args: argparse.Namespace, prompt: str, sequence: int) -> dict[str, 
         elapsed = time.monotonic() - started
         stop.set()
         sampler.join(timeout=2)
-        final_gpu = gpu_snapshot()
+        final_gpu = gpu_snapshot(
+            getattr(args, "gpu_name", None),
+            getattr(args, "gpu_memory_used_mib", None),
+            getattr(args, "gpu_memory_total_mib", None),
+            getattr(args, "gpu_driver_version", None),
+        )
         if final_gpu is not None:
             samples.append(final_gpu)
 
@@ -287,6 +310,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-p", type=float, default=0.95)
     parser.add_argument("--top-k", type=int, default=20)
     parser.add_argument("--hourly-cost", type=float, default=float(os.getenv("GPU_HOURLY_COST_USD", "0")))
+    parser.add_argument("--gpu-name", default=os.getenv("BENCHMARK_GPU_NAME"))
+    parser.add_argument(
+        "--gpu-memory-used-mib",
+        type=int,
+        default=int(os.getenv("BENCHMARK_GPU_MEMORY_USED_MIB", "0")) or None,
+    )
+    parser.add_argument(
+        "--gpu-memory-total-mib",
+        type=int,
+        default=int(os.getenv("BENCHMARK_GPU_MEMORY_TOTAL_MIB", "0")) or None,
+    )
+    parser.add_argument("--gpu-driver-version", default=os.getenv("BENCHMARK_GPU_DRIVER_VERSION"))
     args = parser.parse_args()
     if not args.api_key:
         parser.error("set QWEN_GPU_API_KEY or pass --api-key")

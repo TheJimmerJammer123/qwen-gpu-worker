@@ -66,8 +66,11 @@ def graphql_json(query: str) -> dict[str, Any]:
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")[:1000]
         raise SystemExit(f"RunPod GraphQL HTTP {error.code}: {body}") from None
-    if not isinstance(result, dict) or result.get("errors"):
+    if not isinstance(result, dict):
         raise SystemExit("error: RunPod returned an invalid GraphQL response")
+    if result.get("errors"):
+        detail = json.dumps(result["errors"], sort_keys=True)[:1000]
+        raise SystemExit(f"error: RunPod GraphQL query failed: {detail}")
     return result
 
 
@@ -138,7 +141,7 @@ def prototype_payload() -> dict[str, Any]:
     image = os.environ.get("QWEN_WORKER_IMAGE", DEFAULT_IMAGE)
     if not re.fullmatch(r"[a-z0-9.-]+/[a-z0-9._/-]+:[A-Za-z0-9._-]+", image):
         raise SystemExit("error: QWEN_WORKER_IMAGE must be a pinned registry image tag")
-    api_key = os.environ.get("LLAMA_API_KEY")
+    api_key = os.environ.get("LLAMA_API_KEY") or os.environ.get("QWEN_GPU_API_KEY")
     if not api_key or len(api_key) < 32:
         raise SystemExit("error: LLAMA_API_KEY must be a fresh secret of at least 32 characters")
     hourly_cost = os.environ.get("GPU_HOURLY_COST_USD", "0.22")
@@ -174,6 +177,29 @@ def prototype_payload() -> dict[str, Any]:
     }
 
 
+def profile_update_payload(profile: str) -> dict[str, Any]:
+    """Build a complete, secret-safe environment replacement for a profile restart."""
+    if profile not in {"baseline", "optimized"}:
+        raise SystemExit("error: profile must be baseline or optimized")
+    api_key = os.environ.get("LLAMA_API_KEY") or os.environ.get("QWEN_GPU_API_KEY")
+    if not api_key or len(api_key) < 32:
+        raise SystemExit("error: LLAMA_API_KEY must be available and at least 32 characters")
+    hourly_cost = os.environ.get("GPU_HOURLY_COST_USD", "0.22")
+    try:
+        cost = float(hourly_cost)
+    except ValueError:
+        raise SystemExit("error: GPU_HOURLY_COST_USD must be numeric") from None
+    if not 0 < cost <= 1:
+        raise SystemExit("error: GPU_HOURLY_COST_USD is outside the prototype safety range")
+    return {
+        "env": {
+            "PROFILE": profile,
+            "LLAMA_API_KEY": api_key,
+            "GPU_HOURLY_COST_USD": str(cost),
+        }
+    }
+
+
 def require_confirmation(args: argparse.Namespace, action: str) -> None:
     if not args.yes:
         raise SystemExit(f"error: {action} changes cloud resources; rerun with --yes")
@@ -201,13 +227,19 @@ def main() -> int:
             "inventory",
             "list-pods",
             "gpu-offers",
+            "pod-telemetry",
             "get-pod",
             "create-prototype",
+            "enable-telemetry",
+            "disable-telemetry",
+            "set-profile",
+            "start",
             "stop",
             "terminate",
         ),
     )
     parser.add_argument("--pod-id")
+    parser.add_argument("--profile", choices=("baseline", "optimized"))
     parser.add_argument("--yes", action="store_true")
     args = parser.parse_args()
     if args.command == "list-pods":
@@ -240,6 +272,19 @@ def main() -> int:
         )
         offers = (result.get("data") or {}).get("gpuTypes")
         print(json.dumps(require_list(offers, "GPU offers"), indent=2, sort_keys=True))
+    elif args.command == "pod-telemetry":
+        if not args.pod_id or not re.fullmatch(r"[a-z0-9]{10,30}", args.pod_id):
+            raise SystemExit("error: a valid --pod-id is required")
+        result = graphql_json(
+            f"""query {{ pod(input: {{ podId: \"{args.pod_id}\" }}) {{
+              dockerId gpuCount memoryInGb
+              runtime {{ uptimeInSeconds gpus {{ id gpuUtilPercent memoryUtilPercent }} }}
+            }} }}"""
+        )
+        telemetry = (result.get("data") or {}).get("pod")
+        if not isinstance(telemetry, dict):
+            raise SystemExit("error: RunPod returned invalid Pod telemetry")
+        print(json.dumps(telemetry, indent=2, sort_keys=True))
     elif args.command == "get-pod":
         if not args.pod_id:
             raise SystemExit("error: --pod-id is required")
@@ -260,12 +305,63 @@ def main() -> int:
         if not isinstance(created, dict):
             raise SystemExit("error: RunPod returned an invalid create response")
         print(json.dumps(sanitized_pod(created), indent=2, sort_keys=True))
-    elif args.command in {"stop", "terminate"}:
+    elif args.command in {"enable-telemetry", "disable-telemetry"}:
+        require_confirmation(args, args.command)
+        if not args.pod_id:
+            raise SystemExit("error: --pod-id is required")
+        require_prototype_pod(args.pod_id)
+        if args.command == "enable-telemetry":
+            wrapper = """/app/scripts/entrypoint.sh &
+server_pid=$!
+for attempt in $(seq 1 300); do
+  if curl --silent --fail --max-time 2 \\
+    -H \"Authorization: Bearer $LLAMA_API_KEY\" \\
+    http://127.0.0.1:8000/v1/models >/dev/null; then
+    nvidia-smi --query-gpu=name,memory.used,memory.total,driver_version \\
+      --format=csv,noheader,nounits
+    break
+  fi
+  sleep 1
+done
+wait $server_pid"""
+            payload = {
+                "dockerEntrypoint": ["/bin/bash", "-lc"],
+                "dockerStartCmd": [wrapper],
+            }
+        else:
+            payload = {"dockerEntrypoint": [], "dockerStartCmd": []}
+        changed = request_json(f"/pods/{args.pod_id}/update", method="POST", payload=payload)
+        if not isinstance(changed, dict):
+            raise SystemExit("error: RunPod returned an invalid update response")
+        print(json.dumps(sanitized_pod(changed), indent=2, sort_keys=True))
+    elif args.command == "set-profile":
+        require_confirmation(args, args.command)
+        if not args.pod_id:
+            raise SystemExit("error: --pod-id is required")
+        if not args.profile:
+            raise SystemExit("error: --profile is required")
+        require_prototype_pod(args.pod_id)
+        changed = request_json(
+            f"/pods/{args.pod_id}/update",
+            method="POST",
+            payload=profile_update_payload(args.profile),
+        )
+        if not isinstance(changed, dict):
+            raise SystemExit("error: RunPod returned an invalid update response")
+        print(json.dumps(sanitized_pod(changed), indent=2, sort_keys=True))
+    elif args.command in {"start", "stop", "terminate"}:
         require_confirmation(args, args.command)
         if not args.pod_id:
             raise SystemExit("error: --pod-id is required")
         pod = require_prototype_pod(args.pod_id)
-        if args.command == "stop":
+        if args.command == "start":
+            changed = request_json(f"/pods/{args.pod_id}/start", method="POST")
+            if isinstance(changed, dict):
+                pod = changed
+            else:
+                pod["desiredStatus"] = "RUNNING"
+            print(json.dumps(sanitized_pod(pod), indent=2, sort_keys=True))
+        elif args.command == "stop":
             changed = request_json(f"/pods/{args.pod_id}/stop", method="POST")
             if isinstance(changed, dict):
                 pod = changed

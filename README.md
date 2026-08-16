@@ -217,12 +217,19 @@ benchmark/task evidence and push the task branch before terminating the Pod.
 
 ## Current prototype status
 
-The implementation and local tests are complete. Docker 29.1.3 is active on
-`ubuntudailydriver`, and the pinned CUDA image builds locally as
-`qwen-gpu-worker:b10453`. RunPod API access through process-only Infisical
-injection is verified. No 3090 throughput numbers or Qwen-authored repository
-diff are claimed until the published image completes its first paid GPU run; see
-`docs/RESULTS.md` for the exact remaining gate.
+The paid RunPod inference gate is complete. The pinned image ran fully on one RTX
+3090: the stable 32K baseline used 19,142 MiB and generated at a 29.755 tok/s
+median; the 64K/MTP profile used 21,994 MiB and generated at 37.511 tok/s. Both
+profiles completed three long-context calls without retries. The Pod is stopped
+with its model cache retained.
+
+The prepared JammerVIO coding task has not run because the installed Qwen Code
+CLI remains protected by an older credential-quarantine marker. Native Codex
+custom-provider registration also needs a Responses compatibility adapter for
+Codex namespace tools and Qwen system-message ordering. The recommended immediate
+worker shape is therefore the existing bounded Qwen Code subprocess/worktree
+pattern, with Codex reviewing and publishing its diff. See `docs/RESULTS.md` and
+`docs/CODEX_WORKER.md`.
 
 The local validation command is:
 
@@ -230,8 +237,8 @@ The local validation command is:
 ./scripts/validate.sh
 ```
 
-Account and secret handoff is documented in `docs/CREDENTIAL_HANDOFF.md`. The
-remaining external work is installing or providing a container build runtime,
-publishing the image, creating the Pod, rotating the quarantined old credential,
-and supplying the disposable endpoint key/base URL. No source-control credential
-belongs on the GPU worker.
+Account and secret handling is documented in `docs/CREDENTIAL_HANDOFF.md`. The
+remaining external gate is verifying rotation of the quarantined older Qwen
+credential, removing its marker deliberately, restarting the cached Pod, and
+running the prepared repository task. No source-control credential belongs on the
+GPU worker.

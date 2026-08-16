@@ -159,7 +159,9 @@ The wrapper now uses JSON Lines streaming instead of the truncated monolithic
 report, validates the terminal result across the stream, and probes the
 authenticated `/models` endpoint before launching Qwen. All 25 local prototype
 tests pass. The transport change still needs one live endpoint retry before it is
-treated as operationally proven.
+treated as operationally proven. A targeted restart at 13:52 EDT failed before
+allocation because the retained RunPod host had no free GPU; the Pod remained
+stopped and incurred no new running time.
 
 The resulting change validates blank and whitespace-only Supabase URL/key values
 before client construction, names the two expected Gradle properties in actionable

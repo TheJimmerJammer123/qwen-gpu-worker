@@ -21,9 +21,14 @@ SPEC.loader.exec_module(benchmark)
 class BenchmarkTest(unittest.TestCase):
     def test_run_once_records_required_measurements(self) -> None:
         response = {
-            "choices": [{"finish_reason": "stop"}],
+            "choices": [{"finish_reason": "stop", "message": {"content": "Benchmark response."}}],
             "usage": {"prompt_tokens": 321, "completion_tokens": 123},
-            "timings": {"prompt_per_second": 456.7, "predicted_per_second": 18.9},
+            "timings": {
+                "prompt_per_second": 456.7,
+                "predicted_per_second": 18.9,
+                "draft_n": 42,
+                "draft_n_accepted": 30,
+            },
         }
         gpu_samples = [
             {"name": "RTX 3090", "memory_used_mib": 20000, "memory_total_mib": 24576, "driver_version": "580"},
@@ -64,8 +69,8 @@ class BenchmarkTest(unittest.TestCase):
                 return response
 
             with mock.patch.object(benchmark, "request_json", side_effect=delayed_response), mock.patch.object(
-                benchmark, "gpu_snapshot", side_effect=gpu_samples
-            ):
+                benchmark, "request_speculative_metrics", return_value={"llamacpp:spec_accept": 30.0}
+            ), mock.patch.object(benchmark, "gpu_snapshot", side_effect=gpu_samples):
                 record = benchmark.run_once(args, "test prompt", 1)
 
         self.assertTrue(record["success"])
@@ -80,6 +85,9 @@ class BenchmarkTest(unittest.TestCase):
         self.assertEqual(record["attempts"], 1)
         self.assertEqual(record["retries"], 0)
         self.assertFalse(record["speculative_enabled"])
+        self.assertEqual(record["server_timings"]["draft_n"], 42)
+        self.assertEqual(record["speculative_metrics"]["draft_n_accepted"], 30)
+        self.assertEqual(record["server_speculative_metrics"]["llamacpp:spec_accept"], 30.0)
         self.assertNotIn("api_key", record)
 
     def test_profile_mismatch_fails_before_request(self) -> None:
@@ -159,6 +167,49 @@ class BenchmarkTest(unittest.TestCase):
         self.assertEqual(record["retries"], 1)
         self.assertEqual(record["failure_classes"], ["ValueError", "ValueError"])
         self.assertEqual(request.call_count, 2)
+
+    def test_empty_choice_content_is_retried_and_fails(self) -> None:
+        response = {
+            "choices": [{"finish_reason": "stop", "message": {"content": "  "}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 1},
+            "timings": {"prompt_per_second": 100, "predicted_per_second": 10},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "effective.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "profile": "baseline",
+                        "model": "Qwen3.8-27B-Q4_K_M",
+                        "context_size": 32768,
+                        "speculative": {"enabled": False, "type": "none"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            args = Namespace(
+                endpoint="http://example.test/v1",
+                api_key="not-recorded",
+                model="Qwen3.8-27B-Q4_K_M",
+                temperature=1.0,
+                top_p=0.95,
+                top_k=20,
+                max_tokens=128,
+                server_config=config_path,
+                hourly_cost=0.22,
+                profile="baseline",
+                quantization="Q4_K_M",
+                context_size=32768,
+                target_input_tokens=0,
+                max_attempts=2,
+            )
+            with mock.patch.object(benchmark, "request_json", return_value=response) as request, mock.patch.object(
+                benchmark, "gpu_snapshot", return_value=None
+            ), mock.patch.object(benchmark.time, "sleep"):
+                record = benchmark.run_once(args, "test prompt", 1)
+        self.assertFalse(record["success"])
+        self.assertEqual(request.call_count, 2)
+        self.assertIn("nonempty message content", record["error"])
 
 
 if __name__ == "__main__":

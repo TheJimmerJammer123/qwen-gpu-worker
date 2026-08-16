@@ -28,6 +28,12 @@ readonly LLAMA_HOST="${LLAMA_HOST:-0.0.0.0}"
 readonly LLAMA_PORT="${LLAMA_PORT:-8000}"
 mkdir -p "$MODEL_DIR" "$RESULTS_DIR"
 
+command -v nvidia-smi >/dev/null 2>&1 || die "nvidia-smi is unavailable; GPU runtime was not attached"
+gpu_name="$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1 | xargs)"
+gpu_total_mib="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1 | xargs)"
+[[ "$gpu_total_mib" =~ ^[0-9]+$ ]] || die "invalid GPU memory value from nvidia-smi: $gpu_total_mib"
+(( gpu_total_mib >= 23000 )) || die "profile requires a 24 GB-class GPU; found ${gpu_name} (${gpu_total_mib} MiB)"
+
 download_artifact() {
   local repo="$1" revision="$2" file="$3" expected_size="$4" expected_sha="$5"
   local destination="${MODEL_DIR}/${file}"
@@ -65,12 +71,6 @@ download_artifact "$MODEL_REPO" "$MODEL_REVISION" "$MODEL_FILE" "$MODEL_SIZE_BYT
 if [[ "$SPECULATIVE_ENABLED" == "true" ]]; then
   download_artifact "$MODEL_REPO" "$MODEL_REVISION" "$MTP_FILE" "$MTP_SIZE_BYTES" "$MTP_SHA256"
 fi
-
-command -v nvidia-smi >/dev/null 2>&1 || die "nvidia-smi is unavailable; GPU runtime was not attached"
-gpu_name="$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1 | xargs)"
-gpu_total_mib="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1 | xargs)"
-[[ "$gpu_total_mib" =~ ^[0-9]+$ ]] || die "invalid GPU memory value from nvidia-smi: $gpu_total_mib"
-(( gpu_total_mib >= 23000 )) || die "profile requires a 24 GB-class GPU; found ${gpu_name} (${gpu_total_mib} MiB)"
 
 jq -n \
   --arg profile "${PROFILE:-baseline}" \

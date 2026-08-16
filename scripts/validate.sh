@@ -8,6 +8,7 @@ cd "$root"
 command -v shellcheck >/dev/null || { echo "error: shellcheck is required" >&2; exit 127; }
 command -v jq >/dev/null || { echo "error: jq is required" >&2; exit 127; }
 
+./scripts/preflight.sh source
 bash -n scripts/*.sh
 shellcheck -S warning scripts/*.sh
 python3 -m compileall -q scripts tests

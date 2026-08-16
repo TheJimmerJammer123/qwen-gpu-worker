@@ -24,25 +24,81 @@ readonly qwen_binary
 readonly sandbox_provider="${QWEN_SANDBOX_PROVIDER:-docker}"
 command -v "$sandbox_provider" >/dev/null \
   || { echo "error: Qwen Code sandbox provider not found: $sandbox_provider" >&2; exit 127; }
+command -v python3 >/dev/null || { echo "error: python3 is required" >&2; exit 127; }
+
+quarantine_marker="${QWEN_QUARANTINE_MARKER:-${project_root}/../work/qwen.disabled}"
+[[ ! -e "$quarantine_marker" ]] \
+  || { echo "error: Qwen remains quarantined by ${quarantine_marker}" >&2; exit 2; }
+
+repository_root="$(git -C "$repository" rev-parse --show-toplevel)"
+[[ "$repository_root" == "$repository" ]] \
+  || { echo "error: pass the task worktree root, not a subdirectory" >&2; exit 2; }
+[[ -z "$(git -C "$repository" status --porcelain --untracked-files=all)" ]] \
+  || { echo "error: task worktree must start completely clean" >&2; exit 2; }
+[[ -z "$(git -C "$repository" status --ignored --porcelain | head -1)" ]] \
+  || { echo "error: task worktree contains ignored files; use a fresh linked worktree" >&2; exit 2; }
+branch="$(git -C "$repository" symbolic-ref --quiet --short HEAD)" \
+  || { echo "error: task worktree cannot use detached HEAD" >&2; exit 2; }
+case "$branch" in
+  main|master|develop|release/*) echo "error: protected branch is not a Qwen task branch: ${branch}" >&2; exit 2 ;;
+esac
+branch_prefix="${QWEN_TASK_BRANCH_PREFIX:-qwen/}"
+[[ "$branch" == "${branch_prefix}"* ]] \
+  || { echo "error: task branch must begin with ${branch_prefix}; found ${branch}" >&2; exit 2; }
+primary_worktree="$(git -C "$repository" worktree list --porcelain | awk '/^worktree / {print substr($0, 10); exit}')"
+if [[ "$repository" == "$primary_worktree" && "${QWEN_ALLOW_PRIMARY_WORKTREE:-false}" != "true" ]]; then
+  echo "error: use a disposable linked worktree, or explicitly set QWEN_ALLOW_PRIMARY_WORKTREE=true" >&2
+  exit 2
+fi
 
 mkdir -p "$qwen_home" "$runtime_dir"
-jq --arg base_url "${QWEN_GPU_BASE_URL%/}" \
+chmod 700 "$qwen_home" "$runtime_dir"
+proxy_port_file="${runtime_dir}/auth-proxy-${BASHPID}.port"
+proxy_client_token="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+readonly proxy_port_file proxy_client_token
+rm -f "$proxy_port_file"
+
+# shellcheck disable=SC2329  # invoked by trap
+cleanup() {
+  if [[ -n "${proxy_pid:-}" ]]; then
+    kill "$proxy_pid" >/dev/null 2>&1 || true
+    wait "$proxy_pid" 2>/dev/null || true
+  fi
+  rm -f "$proxy_port_file"
+}
+trap cleanup EXIT INT TERM
+
+UPSTREAM_BASE_URL="${QWEN_GPU_BASE_URL%/}" \
+UPSTREAM_API_KEY="$QWEN_GPU_API_KEY" \
+PROXY_CLIENT_TOKEN="$proxy_client_token" \
+  python3 "${project_root}/scripts/auth_proxy.py" --port-file "$proxy_port_file" &
+proxy_pid=$!
+readonly proxy_pid
+for _ in $(seq 1 50); do
+  [[ -s "$proxy_port_file" ]] && break
+  kill -0 "$proxy_pid" >/dev/null 2>&1 || { echo "error: local auth proxy exited" >&2; exit 1; }
+  sleep 0.1
+done
+[[ -s "$proxy_port_file" ]] || { echo "error: local auth proxy did not start" >&2; exit 1; }
+local_base_url="http://127.0.0.1:$(<"$proxy_port_file")/v1"
+
+jq --arg base_url "$local_base_url" \
   --argjson context_size "${QWEN_CONTEXT_SIZE:-32768}" \
   '.modelProviders.openai[0].baseUrl = $base_url
    | .modelProviders.openai[0].generationConfig.contextWindowSize = $context_size' \
   "${project_root}/config/qwen-settings.template.json" > "${qwen_home}/settings.json"
-chmod 700 "$qwen_home" "$runtime_dir"
 chmod 600 "${qwen_home}/settings.json"
 
 cd "$repository"
-exec env -i \
+status=0
+env -i \
   HOME="$HOME" \
   USER="${USER:-worker}" \
   PATH="$PATH" \
   LANG="${LANG:-C.UTF-8}" \
   QWEN_HOME="$qwen_home" \
   QWEN_RUNTIME_DIR="$runtime_dir" \
-  OPENAI_API_KEY="$QWEN_GPU_API_KEY" \
+  OPENAI_API_KEY="$proxy_client_token" \
   QWEN_SANDBOX="$sandbox_provider" \
   QWEN_CODE_SUPPRESS_YOLO_WARNING=1 \
   "$qwen_binary" \
@@ -55,4 +111,6 @@ exec env -i \
   --max-tool-calls 60 \
   --max-wall-time 30m \
   --exclude-tools agent \
-  --disabled-slash-commands auth,mcp,extensions
+  --disabled-slash-commands auth,mcp,extensions \
+  || status=$?
+exit "$status"

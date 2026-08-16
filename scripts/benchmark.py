@@ -69,6 +69,35 @@ def request_json(url: str, api_key: str, payload: dict[str, Any]) -> dict[str, A
     return value
 
 
+def request_speculative_metrics(endpoint: str, api_key: str) -> dict[str, float]:
+    base = endpoint.rstrip("/")
+    if base.endswith("/v1"):
+        base = base[:-3]
+    request = urllib.request.Request(
+        f"{base}/metrics",
+        headers={"Authorization": f"Bearer {api_key}"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            body = response.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return {}
+    metrics: dict[str, float] = {}
+    for line in body.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        name, separator, raw_value = line.rpartition(" ")
+        lowered = name.lower()
+        if not separator or not any(word in lowered for word in ("draft", "spec", "accept")):
+            continue
+        try:
+            metrics[name] = float(raw_value)
+        except ValueError:
+            continue
+    return metrics
+
+
 def validate_server_config(args: argparse.Namespace, config: dict[str, Any] | None) -> None:
     if config is None:
         raise ValueError("effective server configuration is missing")
@@ -107,6 +136,12 @@ def validate_response(response: dict[str, Any]) -> None:
     timings = response.get("timings")
     if not isinstance(choices, list) or not choices:
         raise ValueError("response has no completion choices")
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        raise ValueError("completion choice is not an object")
+    message = choice.get("message")
+    if not isinstance(message, dict) or not isinstance(message.get("content"), str) or not message["content"].strip():
+        raise ValueError("completion choice has no nonempty message content")
     if not isinstance(usage, dict) or usage.get("prompt_tokens") is None or usage.get("completion_tokens") is None:
         raise ValueError("response is missing token usage")
     if not isinstance(timings, dict) or timings.get("prompt_per_second") is None or timings.get("predicted_per_second") is None:
@@ -132,6 +167,7 @@ def run_once(args: argparse.Namespace, prompt: str, sequence: int) -> dict[str, 
     failure_classes: list[str] = []
     attempts = 0
     response: dict[str, Any] = {}
+    server_speculative_metrics: dict[str, float] = {}
     try:
         validate_server_config(args, config)
         payload = {
@@ -151,6 +187,7 @@ def run_once(args: argparse.Namespace, prompt: str, sequence: int) -> dict[str, 
             try:
                 response = request_json(f"{args.endpoint.rstrip('/')}/chat/completions", args.api_key, payload)
                 validate_response(response)
+                server_speculative_metrics = request_speculative_metrics(args.endpoint, args.api_key)
                 error = None
                 break
             except (
@@ -187,6 +224,11 @@ def run_once(args: argparse.Namespace, prompt: str, sequence: int) -> dict[str, 
     hourly_cost = args.hourly_cost
     choice = (response.get("choices") or [{}])[0]
     message = choice.get("message") or {}
+    speculative_metrics = {
+        key: value
+        for key, value in timings.items()
+        if "draft" in key.lower() or "accept" in key.lower()
+    }
     return {
         "schema_version": 1,
         "run_id": str(uuid.uuid4()),
@@ -213,8 +255,12 @@ def run_once(args: argparse.Namespace, prompt: str, sequence: int) -> dict[str, 
         "retries": max(0, attempts - 1),
         "failure_classes": failure_classes,
         "backend_config": config,
+        "server_usage": usage,
+        "server_timings": timings,
         "speculative_enabled": bool((config or {}).get("speculative", {}).get("enabled", False)),
         "speculative_type": (config or {}).get("speculative", {}).get("type", "unknown"),
+        "speculative_metrics": speculative_metrics,
+        "server_speculative_metrics": server_speculative_metrics,
         "finish_reason": choice.get("finish_reason"),
         "response_text": message.get("content"),
         "reasoning_content": message.get("reasoning_content"),

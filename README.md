@@ -47,8 +47,16 @@ Prerequisites are Docker Buildx, the NVIDIA Container Toolkit, a driver that
 supports CUDA 12.8, at least 30 GB free disk for the model cache, and one 24 GB
 GPU.
 
+Check the intended machine before building or renting time:
+
 ```bash
-cd /path/to/qwen-gpu-worker
+./scripts/preflight.sh build   # image build machine
+./scripts/preflight.sh gpu     # Compose-capable 3090 host
+./scripts/preflight.sh client  # Qwen Code client, after credential rotation
+```
+
+```bash
+cd /home/jim/Documents/ChatGPT/JammerVIO/qwen
 export LLAMA_API_KEY="$(openssl rand -hex 32)"
 export GPU_HOURLY_COST_USD=0.22
 docker buildx build --load -t qwen-gpu-worker:b10453 .
@@ -145,14 +153,33 @@ timing rates, output tokens, attempts/retries, wall duration, backend
 configuration, speculative state, GPU-hours, and estimated cost. Keep the raw
 `results/benchmarks.jsonl` outside the disposable Pod before deletion.
 
+On a Compose-capable 3090 host, the repeatable matrix command starts each
+profile, waits for health, records model startup time, runs the benchmarks, and
+collects a hashed evidence directory even if a later profile fails:
+
+```bash
+export LLAMA_API_KEY="$(openssl rand -hex 32)"
+export GPU_HOURLY_COST_USD=0.22  # replace with the displayed rate
+./scripts/run-matrix.sh
+```
+
+Set `RUN_OPTIMIZED=false` for a baseline-only gate. See `docs/FIRST_RUN.md` for
+the full stop/go runbook.
+
 ## Qwen Code
 
 Qwen Code 0.21.1 supports custom OpenAI-compatible models through
 `modelProviders.openai`. The template keeps the API key out of settings and reads
-the standard sandbox-forwarded `OPENAI_API_KEY`; the wrapper maps the disposable
-`QWEN_GPU_API_KEY` to it at runtime. Use a dedicated `QWEN_HOME` so this prototype
-does not alter an existing provider configuration. The client host also needs
-Docker or Podman for Qwen Code's tool sandbox:
+the standard `OPENAI_API_KEY`. The wrapper starts a loopback-only auth proxy and
+gives Qwen a random local token; only the proxy receives `QWEN_GPU_API_KEY`, so
+the real endpoint key is not copied into Qwen's Docker sandbox arguments or
+metadata. Use a dedicated `QWEN_HOME` so this prototype does not alter an existing
+provider configuration. The client host also needs Docker or Podman for Qwen
+Code's tool sandbox:
+
+```bash
+npm install --global @qwen-code/qwen-code@0.21.1
+```
 
 ```bash
 export QWEN_GPU_BASE_URL='https://YOUR-ENDPOINT/v1'
@@ -166,7 +193,10 @@ export QWEN_SANDBOX_PROVIDER=docker
 The wrapper limits the run to 45 turns, 60 top-level tool calls, and 30 minutes;
 it disables nested agents and provider-changing commands. It launches Qwen Code
 with a scrubbed environment and uses YOLO approval only inside Qwen Code's
-container sandbox, against a disposable task worktree with no broad credentials.
+container sandbox. It enforces a clean `qwen/*` task branch, rejects protected or
+detached branches and ignored files, and requires a linked disposable worktree by
+default. The override `QWEN_ALLOW_PRIMARY_WORKTREE=true` is intentionally
+explicit and is not appropriate for the JammerVIO trial.
 The orchestrator—not Qwen—reviews the diff, runs sanctioned tests, commits,
 pushes, and opens a merge/pull request.
 
@@ -194,3 +224,9 @@ The local validation command is:
 ```bash
 ./scripts/validate.sh
 ```
+
+Account and secret handoff is documented in `docs/CREDENTIAL_HANDOFF.md`. The
+remaining external work is installing or providing a container build runtime,
+publishing the image, creating the Pod, rotating the quarantined old credential,
+and supplying the disposable endpoint key/base URL. No source-control credential
+belongs on the GPU worker.

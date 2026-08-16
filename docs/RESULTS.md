@@ -39,6 +39,31 @@ arithmetic is not accepted as proof that the optimized profile fits.
 These cells must be filled from `results/benchmarks.jsonl`; estimates must not be
 substituted for measurements.
 
+## Credential-ready preparation
+
+The pre-account work is complete:
+
+- both pinned Hugging Face artifacts respond at their immutable revisions;
+- the llama.cpp `b10453` tag resolves to the pinned commit;
+- host preflight distinguishes build, 24 GB GPU, and Qwen Code client roles;
+- GPU suitability is checked before any multi-gigabyte artifact download;
+- the Compose profile runner records startup health and timing before benchmarking;
+- the matrix runner preserves baseline evidence if the optimized profile fails
+  and tears down the server by default;
+- benchmark rows retain raw llama.cpp timings and extracted draft/acceptance
+  metrics plus a best-effort `/metrics` snapshot for the MTP comparison;
+- request-only cost and controlled Compose allocation cost are recorded
+  separately;
+- the Qwen launcher enforces a clean disposable task worktree and uses a local
+  auth proxy so the real endpoint key is not forwarded into sandbox arguments;
+- the evidence collector deliberately avoids container environment and
+  interpolated Compose output, hashes every collected file, and has a regression
+  test proving the disposable key is not collected.
+
+This host's GPU/client preflights correctly stop on the missing container runtime,
+5 GB GPU, and Qwen quarantine marker. Those are expected gates, not successful
+inference results.
+
 The official RunPod pricing page listed the RTX 3090 at $0.22/hour on Community
 Cloud and $0.50/hour on Secure Cloud when checked. At the lower on-demand rate,
 a continuously allocated 10-hour window costs about $2.20 per night or $66 for

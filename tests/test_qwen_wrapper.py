@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import tempfile
 import unittest
@@ -13,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class QwenWrapperTest(unittest.TestCase):
-    def test_forces_sandbox_and_forwards_disposable_key_as_openai_key(self) -> None:
+    def test_forces_sandbox_without_forwarding_upstream_key(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             bin_dir = temp / "bin"
@@ -22,6 +21,7 @@ class QwenWrapperTest(unittest.TestCase):
             bin_dir.mkdir()
             home.mkdir()
             subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            subprocess.run(["git", "-C", str(repo), "switch", "-q", "-c", "qwen/test-task"], check=True)
             prompt = temp / "prompt.md"
             prompt.write_text("Make a harmless test change.", encoding="utf-8")
             fake_docker = bin_dir / "docker"
@@ -29,7 +29,7 @@ class QwenWrapperTest(unittest.TestCase):
             fake_qwen = bin_dir / "qwen"
             fake_qwen.write_text(
                 "#!/bin/sh\n"
-                "python3 -c 'import json,os,sys; print(json.dumps({\"sandbox\": os.environ.get(\"QWEN_SANDBOX\"), \"openai_key\": os.environ.get(\"OPENAI_API_KEY\"), \"args\": sys.argv[1:]}))' \"$@\"\n",
+                "python3 -c 'import json,os,sys; settings=json.load(open(os.path.join(os.environ[\"QWEN_HOME\"], \"settings.json\"))); print(json.dumps({\"sandbox\": os.environ.get(\"QWEN_SANDBOX\"), \"openai_key\": os.environ.get(\"OPENAI_API_KEY\"), \"base_url\": settings[\"modelProviders\"][\"openai\"][0][\"baseUrl\"], \"args\": sys.argv[1:]}))' \"$@\"\n",
                 encoding="utf-8",
             )
             fake_docker.chmod(0o755)
@@ -44,13 +44,17 @@ class QwenWrapperTest(unittest.TestCase):
                 "QWEN_PROTOTYPE_HOME": str(temp / "qwen-home"),
                 "QWEN_PROTOTYPE_RUNTIME_DIR": str(temp / "runtime"),
                 "QWEN_SANDBOX_PROVIDER": "docker",
+                "QWEN_ALLOW_PRIMARY_WORKTREE": "true",
+                "QWEN_QUARANTINE_MARKER": str(temp / "not-quarantined"),
             }
             output = subprocess.check_output(
                 [str(ROOT / "scripts/run-qwen-code.sh"), str(repo), str(prompt)], env=env, text=True
             )
         result = json.loads(output)
         self.assertEqual(result["sandbox"], "docker")
-        self.assertEqual(result["openai_key"], "disposable-test-key")
+        self.assertNotEqual(result["openai_key"], "disposable-test-key")
+        self.assertRegex(result["openai_key"], r"^[0-9a-f]{64}$")
+        self.assertRegex(result["base_url"], r"^http://127\.0\.0\.1:[0-9]+/v1$")
         self.assertIn("--sandbox", result["args"])
         self.assertNotIn("--sandbox=docker", result["args"])
 

@@ -14,7 +14,9 @@ Date: 2026-08-16
 - Local Qwen Code: 0.21.1, but the existing integration is quarantined after a
   credential appeared in a diagnostic process argument. No existing credentials
   were read or tested.
-- Local Docker/Podman/RunPod CLI: unavailable.
+- Local container toolchain: Docker Engine 29.1.3, Compose 2.40.3, and Buildx
+  0.30.1. The engine is enabled and `jim` is in the `docker` group. The
+  temporary bootstrap sudo rule was removed after installation.
 
 ## Artifact decision
 
@@ -60,9 +62,17 @@ The pre-account work is complete:
   interpolated Compose output, hashes every collected file, and has a regression
   test proving the disposable key is not collected.
 
-This host's GPU/client preflights correctly stop on the missing container runtime,
-5 GB GPU, and Qwen quarantine marker. Those are expected gates, not successful
-inference results.
+The pinned CUDA 12.8.1/llama.cpp image was built successfully on
+`ubuntudailydriver` as `qwen-gpu-worker:b10453`. Its local image ID is
+`sha256:1d9d4b1a5648276614ec6bf786487cef09298b7939c0deef994d886c355afb9c`
+and its uncompressed image size is 2,361,013,079 bytes. The payload, entrypoint,
+three llama.cpp executables, and pinned revision label were inspected. As
+expected on the CPU-only build path, `libcuda.so.1` is absent until the NVIDIA
+container runtime injects the host driver; the executable runtime check remains
+a RunPod GPU gate.
+
+This host's GPU/client preflights correctly stop on the 5 GB local GPU and Qwen
+quarantine marker. Those are expected gates, not successful inference results.
 
 The official RunPod pricing page listed the RTX 3090 at $0.22/hour on Community
 Cloud and $0.50/hour on Secure Cloud when checked. At the lower on-demand rate,

@@ -32,7 +32,9 @@ RUN git init /src/llama.cpp \
         -DLLAMA_CURL=OFF \
         -DBUILD_SHARED_LIBS=OFF \
     && cmake --build /src/llama.cpp/build --target llama-server llama-bench llama-cli -j "$(nproc)" \
-    && /src/llama.cpp/build/bin/llama-server --version
+    && test -x /src/llama.cpp/build/bin/llama-server \
+    && test -x /src/llama.cpp/build/bin/llama-bench \
+    && test -x /src/llama.cpp/build/bin/llama-cli
 
 FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION}@${CUDA_RUNTIME_DIGEST}
 

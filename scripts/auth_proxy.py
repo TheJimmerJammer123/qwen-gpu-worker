@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import http.client
+import ipaddress
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -96,6 +97,7 @@ class AuthProxyServer(ThreadingHTTPServer):
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port-file", type=Path, required=True)
+    parser.add_argument("--bind-host", default="127.0.0.1")
     args = parser.parse_args()
     upstream_url = os.environ.get("UPSTREAM_BASE_URL", "")
     upstream_key = os.environ.get("UPSTREAM_API_KEY", "")
@@ -106,7 +108,14 @@ def main() -> int:
     if not upstream_key or not client_token:
         parser.error("UPSTREAM_API_KEY and PROXY_CLIENT_TOKEN are required")
 
-    server = AuthProxyServer(("127.0.0.1", 0), AuthProxyHandler)
+    try:
+        bind_address = ipaddress.ip_address(args.bind_host)
+    except ValueError:
+        parser.error("--bind-host must be an IP address")
+    if not (bind_address.is_loopback or bind_address.is_private):
+        parser.error("--bind-host must be a loopback or private IP address")
+
+    server = AuthProxyServer((args.bind_host, 0), AuthProxyHandler)
     server.upstream = upstream
     server.upstream_key = upstream_key
     server.client_token = client_token

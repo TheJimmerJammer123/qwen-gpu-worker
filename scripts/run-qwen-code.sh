@@ -54,9 +54,18 @@ fi
 mkdir -p "$qwen_home" "$runtime_dir"
 chmod 700 "$qwen_home" "$runtime_dir"
 proxy_port_file="${runtime_dir}/auth-proxy-${BASHPID}.port"
+qwen_output_file="${runtime_dir}/qwen-output-${BASHPID}.json"
 proxy_client_token="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
-readonly proxy_port_file proxy_client_token
-rm -f "$proxy_port_file"
+proxy_bind_host="127.0.0.1"
+proxy_client_host="127.0.0.1"
+if [[ "$sandbox_provider" == "docker" ]]; then
+  proxy_bind_host="$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')"
+  [[ -n "$proxy_bind_host" ]] \
+    || { echo "error: Docker bridge has no gateway for the local auth proxy" >&2; exit 1; }
+  proxy_client_host="host.docker.internal"
+fi
+readonly proxy_port_file qwen_output_file proxy_client_token proxy_bind_host proxy_client_host
+rm -f "$proxy_port_file" "$qwen_output_file"
 
 # shellcheck disable=SC2329  # invoked by trap
 cleanup() {
@@ -64,14 +73,15 @@ cleanup() {
     kill "$proxy_pid" >/dev/null 2>&1 || true
     wait "$proxy_pid" 2>/dev/null || true
   fi
-  rm -f "$proxy_port_file"
+  rm -f "$proxy_port_file" "$qwen_output_file"
 }
 trap cleanup EXIT INT TERM
 
 UPSTREAM_BASE_URL="${QWEN_GPU_BASE_URL%/}" \
 UPSTREAM_API_KEY="$QWEN_GPU_API_KEY" \
 PROXY_CLIENT_TOKEN="$proxy_client_token" \
-  python3 "${project_root}/scripts/auth_proxy.py" --port-file "$proxy_port_file" &
+  python3 "${project_root}/scripts/auth_proxy.py" \
+    --bind-host "$proxy_bind_host" --port-file "$proxy_port_file" &
 proxy_pid=$!
 readonly proxy_pid
 for _ in $(seq 1 50); do
@@ -80,7 +90,7 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 [[ -s "$proxy_port_file" ]] || { echo "error: local auth proxy did not start" >&2; exit 1; }
-local_base_url="http://127.0.0.1:$(<"$proxy_port_file")/v1"
+local_base_url="http://${proxy_client_host}:$(<"$proxy_port_file")/v1"
 
 jq --arg base_url "$local_base_url" \
   --argjson context_size "${QWEN_CONTEXT_SIZE:-32768}" \
@@ -112,5 +122,26 @@ env -i \
   --max-wall-time 30m \
   --exclude-tools agent \
   --disabled-slash-commands auth,mcp,extensions \
+  > "$qwen_output_file" \
   || status=$?
+
+python3 -c 'import pathlib,sys; sys.stdout.write(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))' \
+  "$qwen_output_file"
+if [[ "$status" -eq 0 ]] && ! jq -e '
+  (if type == "array" then . else [.] end)
+  | map(select(.type == "result"))
+  | last
+  | .subtype == "success"
+    and .is_error == false
+    and ((.usage.input_tokens // 0) > 0)
+    and ((.result // "") | contains("[API Error:") | not)
+' "$qwen_output_file" >/dev/null; then
+  echo "error: Qwen returned no successful model-backed result" >&2
+  status=1
+fi
+if [[ "$status" -eq 0 ]] \
+  && [[ -z "$(git -C "$repository" status --porcelain --untracked-files=all)" ]]; then
+  echo "error: Qwen completed without producing a source diff" >&2
+  status=1
+fi
 exit "$status"

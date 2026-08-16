@@ -77,6 +77,13 @@ def require_list(value: Any, name: str) -> list[dict[str, Any]]:
     return value
 
 
+def optional_list(value: Any, name: str) -> list[dict[str, Any]]:
+    """Treat RunPod's 204 response as an empty optional collection."""
+    if value is None:
+        return []
+    return require_list(value, name)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=("inventory", "list-pods"))
@@ -88,7 +95,7 @@ def main() -> int:
         pods = require_list(request_json("/pods"), "Pods")
         templates = require_list(request_json("/templates"), "templates")
         volumes = require_list(request_json("/networkvolumes"), "network volumes")
-        registry_auth = require_list(
+        registry_auth = optional_list(
             request_json("/containerregistryauth"), "container registry authentication"
         )
         result = {

@@ -1,0 +1,46 @@
+name: Publish GPU worker image
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - prototype/single-3090
+    paths:
+      - Dockerfile
+      - config/**
+      - prompts/**
+      - scripts/**
+      - .github/workflows/publish-image.yml
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reclaim runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h /
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/thejimmerjammer123/qwen-gpu-worker:b10453
+            ghcr.io/thejimmerjammer123/qwen-gpu-worker:${{ github.sha }}
+          provenance: mode=max

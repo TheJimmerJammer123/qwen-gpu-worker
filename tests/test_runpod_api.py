@@ -14,6 +14,9 @@ SPEC.loader.exec_module(runpod_api)
 
 
 class RunPodApiTest(unittest.TestCase):
+    def test_optional_list_accepts_no_content_as_empty(self) -> None:
+        self.assertEqual(runpod_api.optional_list(None, "registries"), [])
+
     def test_sanitizes_pod_environment_values(self) -> None:
         pod = runpod_api.sanitized_pod(
             {

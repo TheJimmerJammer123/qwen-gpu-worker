@@ -4,7 +4,7 @@ Date: 2026-08-16
 
 ## Environment inspection
 
-- Prototype repository: `/home/jim/development/projects/infrastructure/qwen-gpu-worker`.
+- Prototype repository: `/home/jim/Documents/ChatGPT/JammerVIO/qwen`.
 - JammerVIO source: `/home/jim/development/projects/dualfin/jammervio`, currently
   `develop` at `e8c654a9e8a5b2e2eaf59e64aed99f26716eaaf9` with unrelated user
   modifications. It was not changed.

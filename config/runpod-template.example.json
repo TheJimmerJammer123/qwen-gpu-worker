@@ -1,0 +1,14 @@
+{
+  "name": "qwen38-27b-llamacpp-single-3090",
+  "imageName": "REGISTRY/OWNER/qwen-gpu-worker:b10453",
+  "containerDiskInGb": 20,
+  "volumeInGb": 30,
+  "volumeMountPath": "/models",
+  "ports": "8000/http",
+  "env": [
+    {"key": "PROFILE", "value": "baseline"},
+    {"key": "LLAMA_API_KEY", "value": "SET-AS-RUNPOD-SECRET"},
+    {"key": "GPU_HOURLY_COST_USD", "value": "SET-TO-ACTUAL-POD-RATE"}
+  ],
+  "dockerArgs": ""
+}

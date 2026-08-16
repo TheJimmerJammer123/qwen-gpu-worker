@@ -1,0 +1,47 @@
+{
+  "$version": 4,
+  "modelProviders": {
+    "openai": [
+      {
+        "id": "Qwen3.8-27B-Q4_K_M",
+        "name": "Qwen3.8 27B Q4_K_M (self-hosted llama.cpp)",
+        "description": "Disposable single-GPU coding worker",
+        "envKey": "OPENAI_API_KEY",
+        "baseUrl": "http://127.0.0.1:8000/v1",
+        "generationConfig": {
+          "timeout": 600000,
+          "maxRetries": 1,
+          "retryInitialDelayMs": 2000,
+          "retryMaxDelayMs": 10000,
+          "contextWindowSize": 32768,
+          "toolResultContentFormat": "parts",
+          "samplingParams": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "max_tokens": 8192
+          },
+          "extra_body": {
+            "top_k": 20,
+            "min_p": 0.0,
+            "presence_penalty": 0.0
+          }
+        }
+      }
+    ]
+  },
+  "security": {
+    "auth": {
+      "selectedType": "openai"
+    }
+  },
+  "model": {
+    "name": "Qwen3.8-27B-Q4_K_M",
+    "maxSessionTurns": 45,
+    "maxToolCalls": 60,
+    "maxWallTimeSeconds": 1800,
+    "skipLoopDetection": false
+  },
+  "privacy": {
+    "usageStatisticsEnabled": false
+  }
+}

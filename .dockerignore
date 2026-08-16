@@ -1,0 +1,6 @@
+.git
+.env
+.qwen-home
+.runtime
+models
+results

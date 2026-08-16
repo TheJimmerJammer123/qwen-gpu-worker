@@ -1,0 +1,10 @@
+.env
+.qwen-home/
+.runtime/
+models/
+results/*.json
+results/*.jsonl
+results/*.csv
+!results/.gitkeep
+__pycache__/
+*.pyc

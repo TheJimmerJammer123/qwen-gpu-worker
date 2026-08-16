@@ -1,0 +1,34 @@
+services:
+  qwen-server:
+    build:
+      context: .
+      args:
+        LLAMA_CPP_COMMIT: ${LLAMA_CPP_COMMIT:-3cb7ffb1a1f612d5e4a46244ae5a3c77ad934a70}
+    image: ${QWEN_WORKER_IMAGE:-qwen-gpu-worker:b10453}
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${LLAMA_PORT:-8000}:8000"
+    environment:
+      PROFILE: ${PROFILE:-baseline}
+      LLAMA_API_KEY: ${LLAMA_API_KEY:?set LLAMA_API_KEY in the environment or .env}
+      GPU_HOURLY_COST_USD: ${GPU_HOURLY_COST_USD:-0}
+    volumes:
+      - qwen-models:/models
+      - qwen-results:/results
+    healthcheck:
+      test: ["CMD", "/app/scripts/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 30m
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  qwen-models:
+  qwen-results:

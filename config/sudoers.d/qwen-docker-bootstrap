@@ -1,0 +1,9 @@
+# Temporary least-privilege bootstrap for the local Qwen container toolchain.
+# Remove after Docker is installed and jim's docker-group membership is active.
+Cmnd_Alias QWEN_DOCKER_BOOTSTRAP = /usr/bin/apt-get update, \
+    /usr/bin/apt-get install -y docker.io docker-buildx docker-compose-v2, \
+    /usr/sbin/usermod -aG docker jim, \
+    /usr/bin/systemctl enable --now docker, \
+    /usr/bin/rm -f /etc/sudoers.d/qwen-docker-bootstrap
+
+jim ALL=(root) NOPASSWD: QWEN_DOCKER_BOOTSTRAP

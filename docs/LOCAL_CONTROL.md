@@ -14,6 +14,22 @@ for this prototype. No Qwen image or active build directory is retained there.
 
 Ubuntu's packaged Docker engine requires one operator-authorized installation:
 
+The preferred temporary-sudo bootstrap is:
+
+```bash
+cd /home/jim/Documents/ChatGPT/JammerVIO/qwen
+/usr/sbin/visudo -cf config/sudoers.d/qwen-docker-bootstrap
+sudo install -o root -g root -m 0440 \
+  config/sudoers.d/qwen-docker-bootstrap \
+  /etc/sudoers.d/qwen-docker-bootstrap
+```
+
+After that one authenticated `install`, Codex can run only the exact commands
+listed in the rule, complete the installation, and remove the temporary rule.
+It does not grant general passwordless sudo.
+
+The equivalent manual installation is:
+
 ```bash
 sudo apt update
 sudo apt install -y docker.io docker-buildx docker-compose-v2

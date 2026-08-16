@@ -19,6 +19,14 @@ Checked 2026-08-16.
   <https://github.com/QwenLM/qwen-code/blob/main/docs/users/features/headless.md>
 - Current RunPod GPU pricing (RTX 3090 Community and Secure Cloud rates):
   <https://www.runpod.io/pricing>
+- RunPod REST Pod creation contract:
+  <https://docs.runpod.io/api-reference/pods/POST/pods>
+- RunPod HTTP proxy/direct TCP behavior and 100-second proxy limit:
+  <https://docs.runpod.io/pods/configuration/expose-ports>
+- RunPod Pod lifecycle and storage behavior:
+  <https://docs.runpod.io/pods/manage-pods>
+- RunPod authenticated GPU stock/price query:
+  <https://docs.runpod.io/sdks/graphql/manage-pods>
 
 Artifact hashes in `config/model.env` were taken from Hugging Face's pinned
 revision response (`x-linked-etag`, the LFS SHA-256) and are rechecked after each

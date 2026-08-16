@@ -44,18 +44,42 @@ cd /home/jim/Documents/ChatGPT/JammerVIO/qwen
 ./scripts/preflight.sh build
 ```
 
-RunPod and registry credentials are injected into individual local child
-processes through Bitwarden Agent Access. They are never copied to devserver2,
-written to this repository, or placed on the GPU worker. RunPod inventory is
-queried with:
+The RunPod credential is injected into individual local child processes through
+the healthy Infisical service. It is never copied to devserver2, written to this
+repository, or placed on the GPU worker. RunPod inventory is queried with:
 
 ```bash
-cd /home/jim/.codex/skills/bitwarden-agent-access
-./scripts/run-with-credential.sh \
-  --domain runpod.io \
-  --env RUNPOD_API_KEY=password \
-  -- /home/jim/Documents/ChatGPT/JammerVIO/qwen/scripts/runpod-api.py inventory
+cd /home/jim/Documents/ChatGPT/JammerVIO/qwen
+infisical run --domain https://infisical.tailbf2de.ts.net \
+  --projectId 8e8371f7-6a39-4304-a608-1703604648ba \
+  --env prod --path /runpod -- \
+  python3 scripts/runpod-api.py inventory
+```
+
+Query the authenticated live 3090 stock/price view without creating anything:
+
+```bash
+infisical run --domain https://infisical.tailbf2de.ts.net \
+  --projectId 8e8371f7-6a39-4304-a608-1703604648ba \
+  --env prod --path /runpod -- \
+  python3 scripts/runpod-api.py gpu-offers
 ```
 
 The inventory client omits all Pod/template environment values and prints only
 the environment variable names plus non-secret resource metadata.
+
+Create and inspect the isolated prototype with a fresh process-only server key:
+
+```bash
+export LLAMA_API_KEY="$(openssl rand -hex 32)"
+export GPU_HOURLY_COST_USD=0.22
+export QWEN_WORKER_IMAGE=ghcr.io/thejimmerjammer123/qwen-gpu-worker:b10453
+infisical run --domain https://infisical.tailbf2de.ts.net \
+  --projectId 8e8371f7-6a39-4304-a608-1703604648ba \
+  --env prod --path /runpod -- \
+  python3 scripts/runpod-api.py create-prototype --yes
+```
+
+The API client refuses to create a second Pod in its prototype namespace and
+refuses to stop or terminate any Pod whose name is outside that namespace. Keep
+`LLAMA_API_KEY` in the controlling shell until benchmark evidence is collected.

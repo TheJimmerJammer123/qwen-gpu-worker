@@ -94,7 +94,7 @@ offload the target model and call that a successful single-3090 result.
 Build once and push the same image that will later be used on SaladCloud:
 
 ```bash
-export IMAGE=REGISTRY/OWNER/qwen-gpu-worker:b10453
+export IMAGE=ghcr.io/thejimmerjammer123/qwen-gpu-worker:b10453
 docker buildx build --platform linux/amd64 --push -t "$IMAGE" .
 ```
 
@@ -104,7 +104,8 @@ Create a RunPod Pod/template with these exact workload values:
 - Container image: `$IMAGE`.
 - Container disk: 20 GB.
 - Persistent/network volume: at least 30 GB, mounted at `/models`.
-- Exposed HTTP port: `8000`.
+- Exposed port: `8000/http` plus `8000/tcp`; direct TCP avoids the HTTPS
+  proxy's 100-second request limit for long generations.
 - Environment: `PROFILE=baseline`, `LLAMA_API_KEY=<fresh random secret>`, and
   `GPU_HOURLY_COST_USD=<the displayed pod rate>`.
 - Do not inject GitHub, GitLab, homelab, production, or deployment credentials
@@ -216,12 +217,12 @@ benchmark/task evidence and push the task branch before terminating the Pod.
 
 ## Current prototype status
 
-The implementation and local static tests are complete. No cloud GPU was
-available from this development host, which has a 5 GB Quadro P2000 and no local
-Docker daemon. The existing Qwen integration is also intentionally quarantined
-by `/home/jim/Documents/ChatGPT/JammerVIO/work/qwen.disabled` pending credential
-rotation. Therefore no 3090 throughput numbers or Qwen-authored repository diff
-are claimed yet; see `docs/RESULTS.md` for the exact remaining gate.
+The implementation and local tests are complete. Docker 29.1.3 is active on
+`ubuntudailydriver`, and the pinned CUDA image builds locally as
+`qwen-gpu-worker:b10453`. RunPod API access through process-only Infisical
+injection is verified. No 3090 throughput numbers or Qwen-authored repository
+diff are claimed until the published image completes its first paid GPU run; see
+`docs/RESULTS.md` for the exact remaining gate.
 
 The local validation command is:
 

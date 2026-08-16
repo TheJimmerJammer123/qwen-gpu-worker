@@ -83,6 +83,13 @@ The benchmark harness uses the actual displayed Pod rate and request wall time,
 so the prototype report will not confuse a full-night allocation estimate with
 GPU-hours actually consumed by the coding task.
 
+The authenticated RunPod GPU inventory also returned one 24 GB RTX 3090 offer
+with `stockStatus=Medium` and a lowest non-interruptible price of $0.22/hour.
+The first Pod is therefore pinned to Community Cloud, one exact RTX 3090, and
+non-interruptible service. Both authenticated HTTPS proxy and direct TCP are
+exposed; the latter is the preferred coding path because RunPod documents a
+100-second HTTP-proxy request ceiling.
+
 ## Real coding task
 
 The best non-duplicative first task is a fail-fast Supabase configuration guard in

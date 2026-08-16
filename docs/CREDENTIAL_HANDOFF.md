@@ -7,9 +7,9 @@ in the inference container.
 
 ## What must exist before the live run
 
-1. A RunPod account with billing enabled and permission to create one Community
-   Cloud RTX 3090 Pod.
-2. A container registry repository that RunPod can pull. Prefer a public
+1. The existing RunPod account has authenticated API access through Infisical's
+   `/runpod` production path; billing capacity is checked at creation time.
+2. The public GHCR repository that RunPod can pull. If the package must remain private,
    prototype image. If it must be private, store the registry pull credential in
    RunPod's registry authentication facility rather than a Pod environment
    variable.
@@ -21,9 +21,8 @@ in the inference container.
 
 4. After the Pod is healthy, its complete OpenAI base URL, including `/v1`.
 
-No RunPod API token is needed for the first manual Pod. If later automation uses
-one, keep it in the operator's approved secret manager and expose it only to the
-provisioning process—not the GPU container or Qwen Code sandbox.
+The RunPod API token remains in Infisical and is exposed only to the local
+provisioning child process—not the GPU container or Qwen Code sandbox.
 
 ## Safe handoff to Codex
 

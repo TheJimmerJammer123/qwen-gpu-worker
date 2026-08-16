@@ -10,7 +10,7 @@ once.
 cd /home/jim/Documents/ChatGPT/JammerVIO/qwen
 ./scripts/preflight.sh build
 
-export IMAGE=REGISTRY/OWNER/qwen-gpu-worker:b10453
+export IMAGE=ghcr.io/thejimmerjammer123/qwen-gpu-worker:b10453
 docker buildx build --platform linux/amd64 --push -t "$IMAGE" .
 ```
 
@@ -19,9 +19,23 @@ and the later SaladCloud test rather than rebuilding between providers.
 
 ## 2. RunPod baseline Pod
 
-Create one RTX 3090 Pod from `config/runpod-template.example.json`. Use a fresh
-server key and set the actual displayed hourly price. Do not attach broad cloud
-or source-control credentials.
+Create one RTX 3090 Pod with the guarded local client. It exposes authenticated
+port 8000 over both RunPod's HTTPS proxy and direct TCP. Prefer direct TCP for
+long requests because the HTTPS proxy has a 100-second request limit.
+
+```bash
+export LLAMA_API_KEY="$(openssl rand -hex 32)"
+export GPU_HOURLY_COST_USD=0.22
+export QWEN_WORKER_IMAGE=ghcr.io/thejimmerjammer123/qwen-gpu-worker:b10453
+infisical run --domain https://infisical.tailbf2de.ts.net \
+  --projectId 8e8371f7-6a39-4304-a608-1703604648ba \
+  --env prod --path /runpod -- \
+  python3 scripts/runpod-api.py create-prototype --yes
+```
+
+Use a fresh server key and reconcile the configured estimate with the actual
+hourly price returned by RunPod. Do not attach broad cloud or source-control
+credentials.
 
 The baseline gate is:
 

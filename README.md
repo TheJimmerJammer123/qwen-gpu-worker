@@ -229,19 +229,20 @@ Qwen Code's context safety limit before editing. The 64K/MTP retry produced the
 requested fail-fast Supabase configuration guard and five focused tests. Codex
 and an independent reviewer found no blocking issue; sanctioned remote compile
 and focused tests passed. The change is available as draft GitLab MR !98 and was
-not merged. Its pipeline is pending because no eligible `jammervio,pve4` runner
-is registered.
+not merged. The authorized disposable runner was restored; pipeline 392's build
+job passed and its quality-baseline job is running.
 
-Qwen Code truncated the successful monolithic JSON report at exactly 65,536
-bytes. The wrapper now requests JSON Lines streaming, validates its terminal
-result, and probes the authenticated endpoint before launching the agent. That
-transport fix is locally tested but still needs one live task retry. Complete
-that retry and GitLab CI before registering a distinct self-hosted route in the
-Codex worker harness. Do not replace the existing native Bailian-backed
-`qwen_worker`. Current vLLM releases also expose a dedicated Codex Responses
-integration worth testing separately; it must prove namespace and custom-tool
-behavior before it becomes the preferred route. See `docs/RESULTS.md` and
-`docs/CODEX_WORKER.md`.
+Qwen Code truncated the earlier monolithic JSON report at exactly 65,536 bytes.
+The wrapper now requests JSON Lines streaming, validates its terminal result,
+and probes the authenticated endpoint before launching the agent. A live
+end-to-end smoke passed through the registered Codex worker route: Qwen edited a
+disposable worktree, ran 4/4 tests, returned a complete report, preserved HEAD,
+produced a verified hashed checkpoint, and received a clean read-only Codex
+review. The distinct route is `/home/jim/development/bin/qwen-selfhosted-worker.sh`;
+the existing native Bailian-backed `qwen_worker` remains unchanged. Current vLLM
+releases expose a dedicated Codex Responses integration worth evaluating later,
+but it is no longer required to get the self-hosted worker running. See
+`docs/RESULTS.md` and `docs/CODEX_WORKER.md`.
 
 The local validation command is:
 
@@ -253,5 +254,5 @@ Account and secret handling is documented in `docs/CREDENTIAL_HANDOFF.md`. The
 operator explicitly authorized clearing the local quarantine without claiming
 that the older credential was rotated; that exception is recorded under `work/`.
 Only the disposable Infisical `/qwen` key was injected through the scrubbed
-wrapper. No source-control credential belongs on the GPU worker. The RunPod Pod
-is stopped with its model cache retained.
+wrapper. No source-control credential belongs on the GPU worker. Both Qwen
+prototype Pods are stopped with their model caches retained.

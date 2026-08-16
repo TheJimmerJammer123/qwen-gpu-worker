@@ -158,10 +158,23 @@ Four bounded task launches established the end-to-end behavior:
 The wrapper now uses JSON Lines streaming instead of the truncated monolithic
 report, validates the terminal result across the stream, and probes the
 authenticated `/models` endpoint before launching Qwen. All 25 local prototype
-tests pass. The transport change still needs one live endpoint retry before it is
-treated as operationally proven. A targeted restart at 13:52 EDT failed before
-allocation because the retained RunPod host had no free GPU; the Pod remained
-stopped and incurred no new running time.
+tests pass. A targeted restart of the retained Pod failed because its host had no
+free GPU, so a replacement Pod was allocated without deleting the original cache.
+
+The registered route at
+`/home/jim/development/bin/qwen-selfhosted-worker.sh` then passed a live smoke in
+a disposable linked worktree. Qwen added one Python function and a built-in
+`unittest` file, ran 4/4 tests successfully, returned a complete 13,192-byte JSON
+Lines report, and left HEAD unchanged. The report recorded 63,406 input tokens,
+1,173 output tokens, and 47,763 cached input tokens. Its hashed before/after/diff
+checkpoint verified, and the automatic read-only Codex review returned `pass`
+with no findings. This proves the Codex subprocess integration path independently
+of the earlier JammerVIO quality task.
+
+Replacement Pod `zv2pp8ozdcwdyl` was allocated from 18:08:06Z to about 18:22:44Z,
+approximately 0.244 hours or $0.054 at $0.22/hour, including the cold model
+download. It and retained Pod `whmvwff58c7wk5` are both stopped with separate
+model caches.
 
 The resulting change validates blank and whitespace-only Supabase URL/key values
 before client construction, names the two expected Gradle properties in actionable
@@ -173,9 +186,9 @@ existing 12-failure ceiling; and the focused class passed 5/5 in 19s.
 The orchestrator committed the reviewed diff as
 `84b0ec1ddfff54050a19a8df8aa4e23993474f48` on
 `fix/supabase-config-guard`, pushed it through the canonical GitLab control plane,
-and opened draft MR !98. It was not merged. Pipeline 392 remains pending because
-no eligible `jammervio,pve4` project runner is registered; the disposable runner
-controller is disabled and VM 321 is stopped on the wrong snapshot lineage.
+and opened draft MR !98. It was not merged. The authorized disposable runner
+boundary was restored to `gitlab-clean-base`; pipeline 392's build job passed and
+the quality-baseline job is running through the one-job controller.
 
 The four task allocations totaled about 0.44 GPU-hours, estimated from start/stop
 timestamps, or about $0.10 at $0.22/hour. This is an allocation estimate rather
@@ -184,18 +197,15 @@ retained.
 
 ## Decision gate
 
-The inference, task-quality, Codex-review, compile, and focused-test gates passed.
-Do not start the unattended SaladCloud phase yet. The remaining gates are:
+The self-hosted Qwen Code subprocess route is now running and integrated into the
+Codex harness with worktree isolation, timeout/budget, shared writer exclusion,
+Git checkpoints, availability checks, the run ledger, and Codex review/escalation.
+The native Bailian-backed `qwen_worker` remains unchanged.
 
-1. Restore the authorized disposable GitLab runner boundary and complete pipeline
-   392 without auto-merging draft MR !98.
-2. Live-verify the new JSON Lines report transport and endpoint availability
-   probe against the cached RunPod endpoint.
-3. Register a distinct self-hosted Qwen Code subprocess route with worktree
-   isolation, timeout/budget, Git checkpoints, availability checks, and Codex
-   review/escalation. Keep the native Bailian-backed `qwen_worker` unchanged.
-4. Separately test current vLLM's native Codex Responses integration, including
-   namespace/custom tools and Qwen reasoning/tool parsers, before preferring it.
+Further model-quality evaluation, SaladCloud preparation, and a separate native
+vLLM Responses experiment are follow-up work rather than integration blockers.
+Pipeline 392 should be allowed to finish and clean up, but it is evidence for the
+sample JammerVIO change rather than a prerequisite for the registered worker.
 
 Both the 32K baseline and 64K/MTP profile fit fully on one 3090. At the measured
 rates, the inference side is economically attractive; the open decision is agent
